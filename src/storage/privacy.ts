@@ -54,7 +54,9 @@ export async function deleteEverything(
 
   if (typeof caches !== 'undefined') {
     const keys = await caches.keys();
-    await Promise.all(keys.map((key) => caches.delete(key)));
+    // Keep the service worker's copy of the app itself, so the app still opens offline.
+    const modelCaches = keys.filter((key) => !key.startsWith('workbox-'));
+    await Promise.all(modelCaches.map((key) => caches.delete(key)));
   }
 
   const storage = typeof navigator !== 'undefined' ? navigator.storage : undefined;

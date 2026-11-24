@@ -89,3 +89,18 @@ describe('export and delete', () => {
     reopened.close();
   });
 });
+
+describe('deleteEverything caches', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('removes model caches but keeps the app precache', async () => {
+    const deleted: string[] = [];
+    vi.stubGlobal('caches', {
+      keys: async () => ['workbox-precache-v2-x', 'webllm/model', 'wllama_cache'],
+      delete: async (key: string) => deleted.push(key),
+    });
+    const temp = new MotivatorDB(`test-${crypto.randomUUID()}`);
+    await deleteEverything(temp);
+    expect(deleted.sort()).toEqual(['webllm/model', 'wllama_cache']);
+  });
+});
