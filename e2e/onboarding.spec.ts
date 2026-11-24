@@ -12,11 +12,15 @@ test('onboarding, mood check-in and delete everything', async ({ page }) => {
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: 'Start' }).click();
 
+  await expect(page.getByText(/one-time download/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Download' }).click();
+
   await expect(page.getByText('How are you feeling today, Asha?')).toBeVisible();
   await page.getByText('Okay', { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Hi Asha' })).toBeVisible();
   await expect(page.getByText(/arjun is getting ready/i)).toBeVisible();
+  await expect(page.getByText(/your coach is ready/i)).toBeVisible();
 
   // Survives a reload: data is in IndexedDB.
   await page.reload();

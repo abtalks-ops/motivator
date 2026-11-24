@@ -289,3 +289,13 @@ button.danger {
 .summary dd {
   margin: 0;
 }
+
+.progress-block progress {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--accent);
+}
+
+.small {
+  font-size: 0.85rem;
+}

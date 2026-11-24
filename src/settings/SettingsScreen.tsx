@@ -5,13 +5,22 @@ import { deleteEverything, downloadExport, type Profile } from '../storage';
 
 interface Props {
   profile: Profile;
+  modelLabel: string;
   onEditProfile: () => void;
+  onChangeModel: () => void;
   onBack: () => void;
   /** Called after all data is deleted. Defaults to reloading the page. */
   onDeleted?: () => void;
 }
 
-export function SettingsScreen({ profile, onEditProfile, onBack, onDeleted }: Props) {
+export function SettingsScreen({
+  profile,
+  modelLabel,
+  onEditProfile,
+  onChangeModel,
+  onBack,
+  onDeleted,
+}: Props) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -43,6 +52,16 @@ export function SettingsScreen({ profile, onEditProfile, onBack, onDeleted }: Pr
         </dl>
         <button type="button" onClick={onEditProfile}>
           Edit profile
+        </button>
+      </section>
+
+      <section className="card" aria-labelledby="model-title">
+        <h2 id="model-title">Coach model</h2>
+        <p>
+          Using <strong>{modelLabel}</strong>, stored on this device.
+        </p>
+        <button type="button" className="secondary" onClick={onChangeModel}>
+          Change model
         </button>
       </section>
 
