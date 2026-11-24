@@ -36,9 +36,21 @@ describe('App', () => {
     await user.click(screen.getByLabelText(/good/i));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(await screen.findByRole('heading', { name: 'Hi Asha' })).toBeInTheDocument();
-    expect(screen.getByText(/feeling/i)).toHaveTextContent(/good/i);
-    expect(screen.getByText(/maya is getting ready/i)).toBeInTheDocument();
-    expect(await screen.findByText(/your coach is ready/i)).toBeInTheDocument();
+    expect(await screen.findByText(/feeling good today/i)).toBeInTheDocument();
+    expect(screen.getByText(/lovely to see you/i)).toBeInTheDocument();
+
+    const input = screen.getByLabelText(/message maya/i);
+    await user.type(input, 'I keep snoozing my alarm{Enter}');
+    expect(
+      await screen.findByText(/I hear you about "I keep snoozing my alarm"/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\[nod\]/)).not.toBeInTheDocument();
+
+    await screen.findByRole('button', { name: 'Send' });
+    await user.type(input, 'honestly I want to die{Enter}');
+    expect(
+      await screen.findByRole('heading', { name: /don.t have to go through this alone/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '14416' })).toHaveAttribute('href', 'tel:14416');
   });
 });

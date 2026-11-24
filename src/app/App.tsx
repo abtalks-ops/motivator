@@ -1,13 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
-import { llm, MODELS, useLlmState } from '../llm';
+import { ChatScreen, logMoodSafely } from '../chat';
+import { llm, MODELS } from '../llm';
 import { MoodCheckIn, MOODS, OnboardingForm } from '../onboarding';
-import { COACHES } from '../persona';
 import { UpdatePrompt } from '../pwa/UpdatePrompt';
 import { usePersistentStorage } from '../pwa/usePersistentStorage';
 import { SettingsScreen } from '../settings';
 import { ModelSetup, type LlmChoice } from '../setup';
-import { localDay, repo, type Profile, type ProfileInput } from '../storage';
+import { localDay, repo, type MoodEntry, type Profile, type ProfileInput } from '../storage';
 
 type View = 'home' | 'settings' | 'edit-profile' | 'change-model';
 
@@ -86,14 +86,14 @@ export function App() {
           <MoodCheckIn
             name={profile.name}
             onSubmit={async (score, note) => {
-              await repo.logMood(score, note);
+              await logMoodSafely(profile, score, note);
             }}
             onSkip={() => setMoodSkippedOn(today)}
           />
         ) : (
           <Home
             profile={profile}
-            moodScore={mood?.score}
+            mood={mood}
             choice={llmChoice}
             onSettings={() => setView('settings')}
           />
@@ -133,51 +133,36 @@ function Welcome() {
 
 function Home({
   profile,
-  moodScore,
+  mood,
   choice,
   onSettings,
 }: {
   profile: Profile;
-  moodScore: number | undefined;
+  mood: MoodEntry | undefined;
   choice: LlmChoice;
   onSettings: () => void;
 }) {
-  const mood = MOODS.find((m) => m.score === moodScore);
-  const coach = COACHES[profile.coach];
+  const moodInfo = MOODS.find((m) => m.score === mood?.score);
   return (
-    <section className="card" aria-labelledby="home-title">
-      <h2 id="home-title">Hi {profile.name}</h2>
-      {mood && (
-        <p>
-          Today you are feeling <strong>{mood.label.toLowerCase()}</strong>{' '}
-          <span aria-hidden="true">{mood.emoji}</span>
+    <>
+      <div className="home-bar">
+        <p className="muted">
+          {moodInfo ? (
+            <>
+              Feeling {moodInfo.label.toLowerCase()} today{' '}
+              <span aria-hidden="true">{moodInfo.emoji}</span>
+            </>
+          ) : (
+            `Hi ${profile.name}`
+          )}
         </p>
-      )}
-      <p>
-        {coach.name} is getting ready to talk about <em>{profile.goal}</em>.
-      </p>
-      <CoachStatus choice={choice} />
-      <p className="muted">Chat with your coach arrives in the next update.</p>
-      <button type="button" className="secondary" onClick={onSettings}>
-        Settings
-      </button>
-    </section>
-  );
-}
-
-function CoachStatus({ choice }: { choice: LlmChoice }) {
-  const state = useLlmState();
-  if (state.status === 'ready') return <p>Your coach is ready, even offline.</p>;
-  if (state.status === 'error')
-    return (
-      <p className="error">
-        {state.error}{' '}
-        <button type="button" onClick={() => void llm.load(choice.tier, choice.runtime)}>
-          Retry
+        <button type="button" className="secondary" onClick={onSettings}>
+          Settings
         </button>
-      </p>
-    );
-  return <p className="muted">Waking up your coach…</p>;
+      </div>
+      <ChatScreen profile={profile} mood={mood} choice={choice} />
+    </>
+  );
 }
 
 function toInput(profile: Profile): ProfileInput {
