@@ -52,3 +52,18 @@ export interface Setting {
   key: string;
   value: unknown;
 }
+
+export interface ChatRecord {
+  id?: number;
+  role: 'user' | 'assistant';
+  /** Clean text, as shown and spoken. */
+  content: string;
+  coach: CoachId;
+  createdAt: number;
+  /** Gesture tags the coach used, for later animation replays. */
+  gestures?: string[];
+  /** True when the crisis check fired on this user message, or for the safety reply. */
+  safety?: boolean;
+  /** Prompt version that produced an assistant reply. */
+  promptVersion?: string;
+}

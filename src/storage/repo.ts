@@ -1,6 +1,6 @@
 import { db as defaultDb, type MotivatorDB } from './db';
 import { localDay } from './day';
-import type { MoodEntry, MoodScore, Profile } from './types';
+import type { ChatRecord, MoodEntry, MoodScore, Profile } from './types';
 
 export type ProfileInput = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -38,6 +38,22 @@ export function createRepo(db: MotivatorDB = defaultDb) {
     async moodForDay(day = localDay()): Promise<MoodEntry | undefined> {
       const entries = await db.moods.where('day').equals(day).sortBy('createdAt');
       return entries.at(-1);
+    },
+
+    async addMessage(record: Omit<ChatRecord, 'id'>): Promise<number> {
+      const id = await db.messages.add(record);
+      if (id === undefined) throw new Error('Could not save message');
+      return id;
+    },
+
+    /** The most recent messages, oldest first. */
+    async recentMessages(limit = 50): Promise<ChatRecord[]> {
+      const latest = await db.messages.orderBy('createdAt').reverse().limit(limit).toArray();
+      return latest.reverse();
+    },
+
+    async clearMessages(): Promise<void> {
+      await db.messages.clear();
     },
 
     async getSetting<T>(key: string): Promise<T | undefined> {

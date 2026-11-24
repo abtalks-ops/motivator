@@ -18,13 +18,21 @@ test('onboarding, mood check-in and delete everything', async ({ page }) => {
   await expect(page.getByText('How are you feeling today, Asha?')).toBeVisible();
   await page.getByText('Okay', { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('heading', { name: 'Hi Asha' })).toBeVisible();
-  await expect(page.getByText(/arjun is getting ready/i)).toBeVisible();
-  await expect(page.getByText(/your coach is ready/i)).toBeVisible();
+  await expect(page.getByText(/good to see you/i)).toBeVisible();
 
-  // Survives a reload: data is in IndexedDB.
+  const input = page.getByLabel('Message Arjun');
+  await input.fill('I froze in the meeting again');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText(/I hear you about "I froze in the meeting again"/)).toBeVisible();
+
+  await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+  await input.fill("I don't want to be alive anymore");
+  await input.press('Enter');
+  await expect(page.getByRole('heading', { name: /go through this alone/i })).toBeVisible();
+
+  // Survives a reload: the conversation is in IndexedDB.
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Hi Asha' })).toBeVisible();
+  await expect(page.getByText(/I hear you about "I froze in the meeting again"/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Delete everything' }).click();

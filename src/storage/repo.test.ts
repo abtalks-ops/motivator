@@ -70,13 +70,25 @@ describe('settings', () => {
   });
 });
 
+describe('messages', () => {
+  it('returns the latest messages oldest first', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await repo.addMessage({ role: 'user', content: `m${i}`, coach: 'maya', createdAt: i });
+    }
+    const recent = await repo.recentMessages(3);
+    expect(recent.map((m) => m.content)).toEqual(['m3', 'm4', 'm5']);
+    await repo.clearMessages();
+    expect(await repo.recentMessages()).toEqual([]);
+  });
+});
+
 describe('export and delete', () => {
   it('exports every table', async () => {
     await repo.saveProfile(input, 1000);
     await repo.logMood(3, undefined, new Date(2026, 10, 24));
     const data = await exportAll(db, new Date('2026-11-24T10:00:00Z'));
     expect(data.format).toBe('motivator-export');
-    expect(Object.keys(data.tables).sort()).toEqual(['moods', 'profile', 'settings']);
+    expect(Object.keys(data.tables).sort()).toEqual(['messages', 'moods', 'profile', 'settings']);
     expect(data.tables.profile).toHaveLength(1);
     expect(data.tables.moods).toHaveLength(1);
   });
