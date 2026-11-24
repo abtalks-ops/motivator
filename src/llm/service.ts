@@ -6,6 +6,7 @@ import type {
   ModelTier,
   RuntimeKind,
 } from './types';
+import { explainError, isRecoverableGpuError, LlmError, logLlmError } from './errors';
 
 export type LlmStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -15,6 +16,8 @@ export interface LlmState {
   runtime: RuntimeKind | null;
   progress: LoadProgress | null;
   error: string | null;
+  /** The runtime's own error text for `error`, shown as a technical detail line. */
+  errorDetail: string | null;
 }
 
 export type EngineFactory = (runtime: RuntimeKind) => Promise<LlmEngine>;
@@ -23,7 +26,7 @@ export type EngineFactory = (runtime: RuntimeKind) => Promise<LlmEngine>;
 export const defaultEngineFactory: EngineFactory = async (runtime) => {
   if (import.meta.env.VITE_FAKE_LLM === '1') {
     const { FakeEngine } = await import('./fake-engine');
-    return new FakeEngine();
+    return new FakeEngine(runtime);
   }
   if (runtime === 'webllm') {
     const { WebLlmEngine } = await import('./webllm-engine');
@@ -39,6 +42,7 @@ const INITIAL: LlmState = {
   runtime: null,
   progress: null,
   error: null,
+  errorDetail: null,
 };
 
 /** Holds the one loaded model for the app and lets React subscribe to its state. */
@@ -60,17 +64,17 @@ export class LlmService {
   };
 
   /** Loads a model. Loads run one at a time, so two models are never in memory together. */
-  load(tier: ModelTier, runtime: RuntimeKind): Promise<void> {
-    const next = this.loading.then(() => this.loadNow(tier, runtime));
+  load(tier: ModelTier, runtime: RuntimeKind, force = false): Promise<void> {
+    const next = this.loading.then(() => this.loadNow(tier, runtime, force));
     this.loading = next.catch(() => undefined);
     return next;
   }
 
-  private async loadNow(tier: ModelTier, runtime: RuntimeKind): Promise<void> {
-    if (this.state.status === 'ready' && this.state.tier === tier && this.state.runtime === runtime)
-      return;
+  private async loadNow(tier: ModelTier, runtime: RuntimeKind, force: boolean): Promise<void> {
+    const same = this.state.tier === tier && this.state.runtime === runtime;
+    if (!force && this.state.status === 'ready' && same) return;
     const id = ++this.loadId;
-    this.set({ status: 'loading', tier, runtime, progress: null, error: null });
+    this.set({ status: 'loading', tier, runtime, progress: null, error: null, errorDetail: null });
     try {
       await this.engine?.unload();
       this.engine = null;
@@ -91,20 +95,54 @@ export class LlmService {
       this.set({ ...this.state, status: 'ready', progress: { fraction: 1, text: 'Ready' } });
     } catch (err) {
       if (id !== this.loadId) return;
-      this.set({ ...this.state, status: 'error', error: describeError(err) });
+      logLlmError(`loading ${tier} model with ${runtime} failed`, err);
+      const { message, detail } = explainError(err, 'load');
+      this.set({ ...this.state, status: 'error', error: message, errorDetail: detail });
     }
   }
 
-  /** One reply at a time: a second call while one is running is refused. */
+  /**
+   * One reply at a time: a second call while one is running is refused.
+   * Failures are rethrown as LlmError, with a plain reason and the runtime's detail. A WebGPU
+   * reply that fails is retried once after reloading the model from the local cache, because
+   * phones often lose the GPU device (for example when the tab was in the background).
+   */
   async generate(messages: ChatMessage[], options?: GenerateOptions): Promise<string> {
-    if (!this.engine || this.state.status !== 'ready') throw new Error('Model is not ready');
-    if (this.generating) throw new Error('Your coach is still replying');
+    if (this.generating) throw new LlmError('Your coach is still replying.', 'busy');
+    if (!this.engine || this.state.status !== 'ready') {
+      if (this.state.error) throw new LlmError(this.state.error, this.state.errorDetail ?? '');
+      throw LlmError.from('Model is not ready', 'reply');
+    }
     this.generating = true;
     try {
       return await this.engine.generate(messages, options);
+    } catch (err) {
+      if (options?.signal?.aborted) throw err;
+      logLlmError(`reply with ${this.state.runtime} failed`, err);
+      const { tier, runtime } = this.state;
+      if (runtime !== 'webllm' || !tier || !isRecoverableGpuError(err)) {
+        throw LlmError.from(err, 'reply');
+      }
+      await this.load(tier, runtime, true);
+      const engine = this.engine as LlmEngine | null;
+      if (!engine || this.state.status !== 'ready' || options?.signal?.aborted) {
+        throw LlmError.from(err, 'reply');
+      }
+      try {
+        return await engine.generate(messages, options);
+      } catch (retryErr) {
+        if (options?.signal?.aborted) throw retryErr;
+        logLlmError('reply failed again after reloading the model', retryErr);
+        throw LlmError.from(retryErr, 'reply');
+      }
     } finally {
       this.generating = false;
     }
+  }
+
+  /** Moves to the CPU (WebAssembly) runtime, which works without WebGPU but downloads its own copy. */
+  switchToCpu(): Promise<void> {
+    return this.load(this.state.tier ?? 'default', 'wllama');
   }
 
   async unload(): Promise<void> {
@@ -120,18 +158,9 @@ export class LlmService {
   }
 }
 
+/** Plain-language reason for a failed model load. */
 export function describeError(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  if (/quota|storage/i.test(message)) {
-    return 'Not enough storage space for the model. Free some space or pick the light model.';
-  }
-  if (/fetch|network|Failed to|load failed|NetworkError/i.test(message)) {
-    return 'The download was interrupted. Check your connection and try again; finished parts are kept.';
-  }
-  if (/webgpu|gpu|device lost/i.test(message)) {
-    return 'The graphics chip could not run this model. Try the light model.';
-  }
-  return message || 'Something went wrong while loading the model.';
+  return explainError(err, 'load').message;
 }
 
 export const llm = new LlmService();

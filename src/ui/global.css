@@ -276,6 +276,22 @@ button.danger {
   color: #a33a3a;
 }
 
+.error-notice .error {
+  margin-bottom: 4px;
+}
+
+.error-detail {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .summary {
   display: grid;
   grid-template-columns: max-content 1fr;

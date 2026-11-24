@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { ChatScreen, logMoodSafely } from '../chat';
-import { llm, MODELS } from '../llm';
+import { llm, logLlmError, MODELS } from '../llm';
 import { MoodCheckIn, MOODS, OnboardingForm } from '../onboarding';
 import { UpdatePrompt } from '../pwa/UpdatePrompt';
 import { usePersistentStorage } from '../pwa/usePersistentStorage';
@@ -96,6 +96,17 @@ export function App() {
             mood={mood}
             choice={llmChoice}
             onSettings={() => setView('settings')}
+            onUseCpu={async () => {
+              try {
+                await llm.switchToCpu();
+                const state = llm.getState();
+                if (state.status === 'ready' && state.tier) {
+                  await saveChoice({ tier: state.tier, runtime: 'wllama' });
+                }
+              } catch (err) {
+                logLlmError('switching to CPU mode failed', err);
+              }
+            }}
           />
         )}
       </main>
@@ -136,11 +147,13 @@ function Home({
   mood,
   choice,
   onSettings,
+  onUseCpu,
 }: {
   profile: Profile;
   mood: MoodEntry | undefined;
   choice: LlmChoice;
   onSettings: () => void;
+  onUseCpu: () => Promise<void>;
 }) {
   const moodInfo = MOODS.find((m) => m.score === mood?.score);
   return (
@@ -160,7 +173,7 @@ function Home({
           Settings
         </button>
       </div>
-      <ChatScreen profile={profile} mood={mood} choice={choice} />
+      <ChatScreen profile={profile} mood={mood} choice={choice} onUseCpu={() => void onUseCpu()} />
     </>
   );
 }
