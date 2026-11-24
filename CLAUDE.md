@@ -48,6 +48,7 @@ src/
   persona/      Arjun and Maya prompts, prompt assembly, gesture tags (PR 4)
   safety/       Crisis-language detection and helpline card          (PR 4)
   chat/         Chat screen and conversation state                   (PR 4)
+  settings/     Profile summary, export and delete everything
   speech/ voice/ character/   Later milestones
 e2e/            Playwright tests
 docs/adr/       Architecture decision records
