@@ -10,13 +10,15 @@ interface Props {
   profile: Profile;
   mood: MoodEntry | undefined;
   choice: LlmChoice;
+  /** Moves to the CPU runtime and remembers it, for phones whose graphics chip fails. */
+  onUseCpu: () => void;
 }
 
-export function ChatScreen({ profile, mood, choice }: Props) {
+export function ChatScreen({ profile, mood, choice, onUseCpu }: Props) {
   const uid = useId();
   const coach = COACHES[profile.coach];
   const llmState = useLlmState();
-  const { messages, pending, error, send, stop } = useChat(profile, mood);
+  const { messages, pending, error, send, retry, stop } = useChat(profile, mood);
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
   const ready = llmState.status === 'ready';
@@ -69,20 +71,29 @@ export function ChatScreen({ profile, mood, choice }: Props) {
       </ol>
       <div ref={endRef} />
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+      {error && llmState.status !== 'error' && (
+        <ErrorNotice
+          message={error.message}
+          detail={error.detail}
+          onRetry={ready ? () => void retry() : undefined}
+          onCpu={llmState.runtime === 'webllm' ? onUseCpu : undefined}
+        />
       )}
       {llmState.status === 'error' ? (
-        <p className="error" role="alert">
-          {llmState.error}{' '}
-          <button type="button" onClick={() => void llm.load(choice.tier, choice.runtime)}>
-            Retry
-          </button>
-        </p>
+        <ErrorNotice
+          message={llmState.error ?? 'Something went wrong while loading the model.'}
+          detail={llmState.errorDetail}
+          onRetry={() =>
+            void llm.load(llmState.tier ?? choice.tier, llmState.runtime ?? choice.runtime)
+          }
+          onCpu={llmState.runtime === 'webllm' ? onUseCpu : undefined}
+        />
       ) : (
-        !ready && <p className="muted small">{coach.name} is waking up…</p>
+        !ready && (
+          <p className="muted small" role="status">
+            {coach.name} is waking up… {llmState.status === 'loading' && llmState.progress?.text}
+          </p>
+        )
       )}
 
       <form
@@ -115,5 +126,34 @@ export function ChatScreen({ profile, mood, choice }: Props) {
         )}
       </form>
     </section>
+  );
+}
+
+interface ErrorNoticeProps {
+  message: string;
+  detail: string | null;
+  onRetry?: (() => void) | undefined;
+  onCpu?: (() => void) | undefined;
+}
+
+/** A failure with its plain reason, the runtime's own detail, and the ways out. */
+function ErrorNotice({ message, detail, onRetry, onCpu }: ErrorNoticeProps) {
+  return (
+    <div className="error-notice" role="alert">
+      <p className="error">{message}</p>
+      {detail && <p className="muted small error-detail">Technical detail: {detail}</p>}
+      <div className="error-actions">
+        {onRetry && (
+          <button type="button" onClick={onRetry}>
+            Retry
+          </button>
+        )}
+        {onCpu && (
+          <button type="button" className="secondary" onClick={onCpu}>
+            Use CPU mode (slower, needs one more download)
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
