@@ -34,3 +34,15 @@ offline. Devices differ widely in GPU support and memory.
 
 Model download is the heaviest step of onboarding and needs progress, resume and retry. The
 `llm` module exposes one interface so runtimes and models can be swapped without touching the UI.
+
+## Implementation notes (milestone 1)
+
+- `src/llm/service.ts` holds the one loaded model; runtimes load with dynamic `import()` so their
+  bundles (about 6 MB for WebLLM, 11 MB wasm for wllama) stay out of the first page load.
+- WebLLM kernels (`model_lib`) come from the `binary-mlc-llm-libs` release matching web-llm
+  0.2.89 (`v0_2_87`). Weights are pinned per commit in `src/llm/models.ts`.
+- wllama runs single-threaded on GitHub Pages, because Pages cannot send the COOP/COEP headers
+  that multi-threading needs. A service worker that adds those headers (as in Mimic) is a
+  follow-up for milestone 4.
+- End-to-end tests build with `VITE_FAKE_LLM=1`, which swaps in a scripted engine. CI checks the
+  production build does not contain it.

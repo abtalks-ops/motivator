@@ -15,7 +15,7 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
+    command: 'VITE_FAKE_LLM=1 npm run build && npm run preview -- --port 4173 --strictPort',
     url: 'http://localhost:4173/motivator/',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

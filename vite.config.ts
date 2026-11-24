@@ -37,4 +37,6 @@ export default defineConfig({
     }),
   ],
   worker: { format: 'es' },
+  // The LLM runtimes are large but load lazily, only after onboarding.
+  build: { chunkSizeWarningLimit: 7000 },
 });

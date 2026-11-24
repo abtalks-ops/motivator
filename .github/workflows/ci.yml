@@ -24,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+      - name: Test-only fake model is not in the production build
+        run: "! grep -rl 'Loading test model' dist"
 
   e2e:
     runs-on: ubuntu-latest

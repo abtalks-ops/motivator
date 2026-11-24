@@ -1,13 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { llm, MODELS, useLlmState } from '../llm';
 import { MoodCheckIn, MOODS, OnboardingForm } from '../onboarding';
 import { COACHES } from '../persona';
 import { UpdatePrompt } from '../pwa/UpdatePrompt';
 import { usePersistentStorage } from '../pwa/usePersistentStorage';
 import { SettingsScreen } from '../settings';
+import { ModelSetup, type LlmChoice } from '../setup';
 import { localDay, repo, type Profile, type ProfileInput } from '../storage';
 
-type View = 'home' | 'settings' | 'edit-profile';
+type View = 'home' | 'settings' | 'edit-profile' | 'change-model';
+
+export const LLM_SETTING = 'llm';
 
 const LOADING = Symbol('loading');
 
@@ -18,6 +22,21 @@ export function App() {
   const mood = useLiveQuery(() => repo.moodForDay(today), [today], LOADING);
   const [moodSkippedOn, setMoodSkippedOn] = useState<string | null>(null);
   const [view, setView] = useState<View>('home');
+  const llmChoice = useLiveQuery(() => repo.getSetting<LlmChoice>(LLM_SETTING), [], LOADING);
+
+  // Once a model has been chosen, load it from the local cache in the background on every visit.
+  useEffect(() => {
+    if (!llmChoice || llmChoice === LOADING) return;
+    const state = llm.getState();
+    const differs = state.tier !== llmChoice.tier || state.runtime !== llmChoice.runtime;
+    if (state.status === 'idle' || (differs && state.status !== 'loading')) {
+      void llm.load(llmChoice.tier, llmChoice.runtime);
+    }
+  }, [llmChoice]);
+
+  const saveChoice = async (choice: LlmChoice) => {
+    await repo.setSetting(LLM_SETTING, choice);
+  };
 
   return (
     <div className="app">
@@ -27,7 +46,7 @@ export function App() {
       </header>
 
       <main className="app-main" id="main">
-        {profile === LOADING || mood === LOADING ? (
+        {profile === LOADING || mood === LOADING || llmChoice === LOADING ? (
           <p className="muted">Loading…</p>
         ) : !profile ? (
           <Welcome />
@@ -40,10 +59,27 @@ export function App() {
               setView('settings');
             }}
           />
+        ) : !llmChoice ? (
+          <ModelSetup onReady={saveChoice} />
+        ) : view === 'change-model' ? (
+          <ModelSetup
+            current={llmChoice}
+            onCancel={() => {
+              // A failed attempt may have unloaded the working model; bring the saved one back.
+              void llm.load(llmChoice.tier, llmChoice.runtime);
+              setView('settings');
+            }}
+            onReady={async (choice) => {
+              await saveChoice(choice);
+              setView('settings');
+            }}
+          />
         ) : view === 'settings' ? (
           <SettingsScreen
             profile={profile}
+            modelLabel={MODELS[llmChoice.tier].label}
             onEditProfile={() => setView('edit-profile')}
+            onChangeModel={() => setView('change-model')}
             onBack={() => setView('home')}
           />
         ) : !mood && moodSkippedOn !== today ? (
@@ -55,7 +91,12 @@ export function App() {
             onSkip={() => setMoodSkippedOn(today)}
           />
         ) : (
-          <Home profile={profile} moodScore={mood?.score} onSettings={() => setView('settings')} />
+          <Home
+            profile={profile}
+            moodScore={mood?.score}
+            choice={llmChoice}
+            onSettings={() => setView('settings')}
+          />
         )}
       </main>
 
@@ -93,10 +134,12 @@ function Welcome() {
 function Home({
   profile,
   moodScore,
+  choice,
   onSettings,
 }: {
   profile: Profile;
   moodScore: number | undefined;
+  choice: LlmChoice;
   onSettings: () => void;
 }) {
   const mood = MOODS.find((m) => m.score === moodScore);
@@ -113,12 +156,28 @@ function Home({
       <p>
         {coach.name} is getting ready to talk about <em>{profile.goal}</em>.
       </p>
+      <CoachStatus choice={choice} />
       <p className="muted">Chat with your coach arrives in the next update.</p>
       <button type="button" className="secondary" onClick={onSettings}>
         Settings
       </button>
     </section>
   );
+}
+
+function CoachStatus({ choice }: { choice: LlmChoice }) {
+  const state = useLlmState();
+  if (state.status === 'ready') return <p>Your coach is ready, even offline.</p>;
+  if (state.status === 'error')
+    return (
+      <p className="error">
+        {state.error}{' '}
+        <button type="button" onClick={() => void llm.load(choice.tier, choice.runtime)}>
+          Retry
+        </button>
+      </p>
+    );
+  return <p className="muted">Waking up your coach…</p>;
 }
 
 function toInput(profile: Profile): ProfileInput {

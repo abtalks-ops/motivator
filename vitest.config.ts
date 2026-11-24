@@ -14,6 +14,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    env: { VITE_FAKE_LLM: '1' },
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },

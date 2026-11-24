@@ -28,6 +28,10 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Start' }));
 
+    expect(await screen.findByText(/one-time download/i)).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /light/i })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+
     expect(await screen.findByText(/how are you feeling today, asha/i)).toBeInTheDocument();
     await user.click(screen.getByLabelText(/good/i));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -35,5 +39,6 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Hi Asha' })).toBeInTheDocument();
     expect(screen.getByText(/feeling/i)).toHaveTextContent(/good/i);
     expect(screen.getByText(/maya is getting ready/i)).toBeInTheDocument();
+    expect(await screen.findByText(/your coach is ready/i)).toBeInTheDocument();
   });
 });
