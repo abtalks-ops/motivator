@@ -110,6 +110,8 @@ select:focus-visible {
   left: 50%;
   bottom: 16px;
   transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
   display: flex;
   gap: 8px;
   align-items: center;
@@ -117,4 +119,173 @@ select:focus-visible {
   padding: 8px 12px;
   border-radius: var(--radius);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+
+h2 {
+  margin-top: 0;
+}
+
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+legend {
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+label {
+  display: block;
+  margin: 12px 0 4px;
+}
+
+input:not([type='radio']),
+textarea,
+select {
+  font: inherit;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--muted) 50%, transparent);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.moods {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip,
+.mood,
+.option {
+  margin: 0;
+  cursor: pointer;
+}
+
+.chip input,
+.mood input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip span {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.chip input:checked + span {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.chip input:focus-visible + span,
+.mood input:focus-visible ~ span {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+.mood {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 2px;
+  text-align: center;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+}
+
+.mood:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.mood-emoji {
+  font-size: 2rem;
+}
+
+.options {
+  display: grid;
+  gap: 8px;
+}
+
+.option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.option:has(input:checked) {
+  border-color: var(--accent);
+}
+
+.option input {
+  margin-top: 5px;
+}
+
+.block {
+  display: block;
+}
+
+.badge {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: #2b2b2b;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.danger {
+  background: #a33a3a;
+  color: #fff;
+}
+
+.error {
+  color: #a33a3a;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+}
+
+.summary dt {
+  color: var(--muted);
+}
+
+.summary dd {
+  margin: 0;
 }
