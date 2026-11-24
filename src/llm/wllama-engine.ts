@@ -13,16 +13,21 @@ export class WllamaEngine implements LlmEngine {
     await this.unload();
     const wllama = new Wllama({ default: wasmUrl }, { suppressNativeLog: true });
     const entry = MODELS[tier];
-    await wllama.loadModelFromUrl(ggufUrl(entry), {
-      n_ctx: 4096,
-      progressCallback: ({ loaded, total }) => {
-        const fraction = total > 0 ? loaded / total : null;
-        onProgress?.({
-          fraction,
-          text: `Downloading ${entry.label}: ${Math.round(loaded / 1e6)} of ${Math.round(total / 1e6)} MB`,
-        });
-      },
-    });
+    try {
+      await wllama.loadModelFromUrl(ggufUrl(entry), {
+        n_ctx: 4096,
+        progressCallback: ({ loaded, total }) => {
+          const fraction = total > 0 ? loaded / total : null;
+          onProgress?.({
+            fraction,
+            text: `Downloading ${entry.label}: ${Math.round(loaded / 1e6)} of ${Math.round(total / 1e6)} MB`,
+          });
+        },
+      });
+    } catch (err) {
+      await wllama.exit().catch(() => undefined);
+      throw err;
+    }
     this.wllama = wllama;
   }
 
@@ -35,7 +40,13 @@ export class WllamaEngine implements LlmEngine {
       temperature: options.temperature ?? 0.7,
       ...(options.signal ? { abortSignal: options.signal } : {}),
     });
-    return collectStream(stream, options);
+    try {
+      return await collectStream(stream, options);
+    } catch (err) {
+      // wllama throws on abort; treat a stop like WebLLM does and keep the partial reply.
+      if (options.signal?.aborted) return '';
+      throw err;
+    }
   }
 
   async unload(): Promise<void> {

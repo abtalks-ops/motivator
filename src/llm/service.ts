@@ -47,6 +47,8 @@ export class LlmService {
   private engine: LlmEngine | null = null;
   private listeners = new Set<() => void>();
   private loadId = 0;
+  private loading: Promise<void> = Promise.resolve();
+  private generating = false;
 
   constructor(private readonly factory: EngineFactory = defaultEngineFactory) {}
 
@@ -57,7 +59,14 @@ export class LlmService {
     return () => this.listeners.delete(listener);
   };
 
-  async load(tier: ModelTier, runtime: RuntimeKind): Promise<void> {
+  /** Loads a model. Loads run one at a time, so two models are never in memory together. */
+  load(tier: ModelTier, runtime: RuntimeKind): Promise<void> {
+    const next = this.loading.then(() => this.loadNow(tier, runtime));
+    this.loading = next.catch(() => undefined);
+    return next;
+  }
+
+  private async loadNow(tier: ModelTier, runtime: RuntimeKind): Promise<void> {
     if (this.state.status === 'ready' && this.state.tier === tier && this.state.runtime === runtime)
       return;
     const id = ++this.loadId;
@@ -66,9 +75,14 @@ export class LlmService {
       await this.engine?.unload();
       this.engine = null;
       const engine = await this.factory(runtime);
-      await engine.load(tier, (progress) => {
-        if (id === this.loadId) this.set({ ...this.state, progress });
-      });
+      try {
+        await engine.load(tier, (progress) => {
+          if (id === this.loadId) this.set({ ...this.state, progress });
+        });
+      } catch (err) {
+        await engine.unload().catch(() => undefined);
+        throw err;
+      }
       if (id !== this.loadId) {
         await engine.unload();
         return;
@@ -81,9 +95,16 @@ export class LlmService {
     }
   }
 
+  /** One reply at a time: a second call while one is running is refused. */
   async generate(messages: ChatMessage[], options?: GenerateOptions): Promise<string> {
     if (!this.engine || this.state.status !== 'ready') throw new Error('Model is not ready');
-    return this.engine.generate(messages, options);
+    if (this.generating) throw new Error('Your coach is still replying');
+    this.generating = true;
+    try {
+      return await this.engine.generate(messages, options);
+    } finally {
+      this.generating = false;
+    }
   }
 
   async unload(): Promise<void> {

@@ -25,12 +25,19 @@ export class WebLlmEngine implements LlmEngine {
 
   async load(tier: ModelTier, onProgress?: (p: LoadProgress) => void): Promise<void> {
     await this.unload();
-    this.worker = new Worker(new URL('./webllm.worker.ts', import.meta.url), { type: 'module' });
-    this.engine = await CreateWebWorkerMLCEngine(this.worker, MODELS[tier].webllm.modelId, {
-      appConfig: appConfig(),
-      initProgressCallback: (report) =>
-        onProgress?.({ fraction: report.progress, text: report.text }),
-    });
+    const worker = new Worker(new URL('./webllm.worker.ts', import.meta.url), { type: 'module' });
+    try {
+      this.engine = await CreateWebWorkerMLCEngine(worker, MODELS[tier].webllm.modelId, {
+        appConfig: appConfig(),
+        initProgressCallback: (report) =>
+          onProgress?.({ fraction: report.progress, text: report.text }),
+      });
+      this.worker = worker;
+    } catch (err) {
+      // A failed load must not leave a worker holding GPU memory behind.
+      worker.terminate();
+      throw err;
+    }
   }
 
   async generate(messages: ChatMessage[], options: GenerateOptions = {}): Promise<string> {
@@ -45,7 +52,12 @@ export class WebLlmEngine implements LlmEngine {
         max_tokens: options.maxTokens ?? 256,
         temperature: options.temperature ?? 0.7,
       });
-      return await collectStream(stream, options);
+      // An abort that landed before the stream existed would have been missed.
+      if (options.signal?.aborted) engine.interruptGenerate();
+      const text = await collectStream(stream, options);
+      // Leaving the loop early does not stop the worker, so tell it explicitly.
+      if (options.signal?.aborted) engine.interruptGenerate();
+      return text;
     } finally {
       options.signal?.removeEventListener('abort', onAbort);
     }

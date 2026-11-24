@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { llm } from '../llm';
 import { FOCUS_LABELS, STYLE_LABELS } from '../onboarding';
 import { COACHES } from '../persona';
 import { deleteEverything, downloadExport, type Profile } from '../storage';
@@ -27,6 +28,8 @@ export function SettingsScreen({
   async function handleDelete() {
     setBusy(true);
     try {
+      // Stop the model first, so a background download cannot write files back afterwards.
+      await llm.unload();
       await deleteEverything();
       (onDeleted ?? (() => window.location.reload()))();
     } finally {
