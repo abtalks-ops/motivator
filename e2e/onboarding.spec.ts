@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('onboarding, mood check-in and delete everything', async ({ page }) => {
+test('onboarding, mood check-in and delete everything', async ({ page, isMobile }) => {
+  // Fix the reported memory, so the recommendation does not depend on the test machine.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 8 });
+  });
   await page.goto('./');
 
   await page.getByLabel('Name or nickname').fill('Asha');
@@ -13,6 +17,11 @@ test('onboarding, mood check-in and delete everything', async ({ page }) => {
   await page.getByRole('button', { name: 'Start' }).click();
 
   await expect(page.getByText(/one-time download/i)).toBeVisible();
+  // Phones get the small model by default, because the larger ones can crash the tab.
+  const recommended = page.locator('label.option', { has: page.locator('.badge') });
+  if (isMobile) await expect(recommended).toContainText('Phone (SmolLM2 360M)');
+  else await expect(recommended).not.toContainText('Phone');
+  await expect(recommended.getByRole('radio')).toBeChecked();
   await page.getByRole('button', { name: 'Download' }).click();
 
   await expect(page.getByText('How are you feeling today, Asha?')).toBeVisible();
@@ -40,7 +49,7 @@ test('onboarding, mood check-in and delete everything', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
 });
 
-test('a failed reply shows the reason, then recovers in CPU mode', async ({ page }) => {
+test('a failed reply shows the reason, then recovers in CPU mode', async ({ page, isMobile }) => {
   // Pretend the browser has WebGPU, like the phone in the bug report, so the GPU runtime is picked.
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'gpu', {
@@ -64,6 +73,10 @@ test('a failed reply shows the reason, then recovers in CPU mode', async ({ page
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByText(/graphics chip ran out of memory/)).toBeVisible();
   await expect(page.getByText(/Technical detail: Device was lost \(simulated\)/)).toBeVisible();
+  // Phones already run the phone model; elsewhere it is offered as a way out of memory trouble.
+  await expect(page.getByRole('button', { name: /smaller phone model/ })).toHaveCount(
+    isMobile ? 0 : 1,
+  );
 
   await page.getByRole('button', { name: /Use CPU mode/ }).click();
   await page.getByRole('button', { name: 'Retry' }).click();

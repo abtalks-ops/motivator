@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { llm, useLlmState } from '../llm';
+import { llm, MODELS, smallerModelMayHelp, useLlmState } from '../llm';
 import { COACHES, greeting } from '../persona';
 import { HelplineCard } from '../safety';
 import type { MoodEntry, Profile } from '../storage';
@@ -12,9 +12,11 @@ interface Props {
   choice: LlmChoice;
   /** Moves to the CPU runtime and remembers it, for phones whose graphics chip fails. */
   onUseCpu: () => void;
+  /** Moves to the small phone model and remembers it, for phones that run out of memory. */
+  onUsePhoneModel: () => void;
 }
 
-export function ChatScreen({ profile, mood, choice, onUseCpu }: Props) {
+export function ChatScreen({ profile, mood, choice, onUseCpu, onUsePhoneModel }: Props) {
   const uid = useId();
   const coach = COACHES[profile.coach];
   const llmState = useLlmState();
@@ -23,6 +25,11 @@ export function ChatScreen({ profile, mood, choice, onUseCpu }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const ready = llmState.status === 'ready';
   const busy = pending !== null;
+  // Offer the phone model only for memory trouble, which a smaller model can actually avoid.
+  const phoneFor = (detail: string | null) =>
+    (llmState.tier ?? choice.tier) !== 'phone' && smallerModelMayHelp(detail)
+      ? onUsePhoneModel
+      : undefined;
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: 'end' });
@@ -77,6 +84,7 @@ export function ChatScreen({ profile, mood, choice, onUseCpu }: Props) {
           detail={error.detail}
           onRetry={ready ? () => void retry() : undefined}
           onCpu={llmState.runtime === 'webllm' ? onUseCpu : undefined}
+          onPhone={phoneFor(error.detail)}
         />
       )}
       {llmState.status === 'error' ? (
@@ -87,6 +95,7 @@ export function ChatScreen({ profile, mood, choice, onUseCpu }: Props) {
             void llm.load(llmState.tier ?? choice.tier, llmState.runtime ?? choice.runtime)
           }
           onCpu={llmState.runtime === 'webllm' ? onUseCpu : undefined}
+          onPhone={phoneFor(llmState.errorDetail)}
         />
       ) : (
         !ready && (
@@ -134,10 +143,11 @@ interface ErrorNoticeProps {
   detail: string | null;
   onRetry?: (() => void) | undefined;
   onCpu?: (() => void) | undefined;
+  onPhone?: (() => void) | undefined;
 }
 
 /** A failure with its plain reason, the runtime's own detail, and the ways out. */
-function ErrorNotice({ message, detail, onRetry, onCpu }: ErrorNoticeProps) {
+function ErrorNotice({ message, detail, onRetry, onCpu, onPhone }: ErrorNoticeProps) {
   return (
     <div className="error-notice" role="alert">
       <p className="error">{message}</p>
@@ -151,6 +161,11 @@ function ErrorNotice({ message, detail, onRetry, onCpu }: ErrorNoticeProps) {
         {onCpu && (
           <button type="button" className="secondary" onClick={onCpu}>
             Use CPU mode (slower, needs one more download)
+          </button>
+        )}
+        {onPhone && (
+          <button type="button" className="secondary" onClick={onPhone}>
+            Use the smaller phone model (about {MODELS.phone.downloadMB} MB download)
           </button>
         )}
       </div>

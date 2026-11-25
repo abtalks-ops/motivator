@@ -37,9 +37,10 @@ so prompts stay short and the post-processing (tag stripping, length trimming) i
 
 ## Implementation notes (milestone 1)
 
-- Prompts live in `src/persona/prompts.ts` (`PROMPT_VERSION` 1.1.0); each assistant message
-  stores the version that produced it.
-- Crisis messages never reach the model: the app saves a fixed, reviewed reply in the coach's
+- Prompts live in `src/persona/prompts.ts` (`PROMPT_VERSION` 1.2.0); each assistant message
+  stores the version that produced it. Tiny phone models get a compact variant with the same
+  boundaries (ADR 0006).
+- Crisis messages never reach the model, not even as history in later turns: the app saves a fixed, reviewed reply in the coach's
   voice and shows the helpline card (`src/safety`). The helpline list needs a review before
   each release.
 - Tricky test conversations for `/test-persona` are in `src/persona/fixtures/`.

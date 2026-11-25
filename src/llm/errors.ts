@@ -65,6 +65,14 @@ const RULES: { test: RegExp; message: (phase: ErrorPhase) => string }[] = [
 const GPU_RECOVERABLE =
   /device (was )?lost|devicelost|out of memory|OOM|GPUOutOfMemory|GPUValidation|webgpu|\bgpu\b/i;
 
+/** Failures a model with a smaller memory footprint can avoid: out of memory, a lost GPU. */
+const MEMORY_PRESSURE =
+  /device (was )?lost|devicelost|out of memory|OOM|GPUOutOfMemory|allocat|maxBufferSize|maxStorageBuffer|buffer size|memory/i;
+
+export function smallerModelMayHelp(detail: string | null | undefined): boolean {
+  return !!detail && MEMORY_PRESSURE.test(detail);
+}
+
 export function isRecoverableGpuError(err: unknown): boolean {
   return GPU_RECOVERABLE.test(errorText(err));
 }

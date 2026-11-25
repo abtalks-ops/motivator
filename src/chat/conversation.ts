@@ -1,22 +1,46 @@
 import type { ChatMessage } from '../llm';
+import { checkCrisis } from '../safety';
 import type { ChatRecord, CoachId } from '../storage';
 
 /** How many past messages go to the model. Small models have small context windows. */
 export const HISTORY_LIMIT = 12;
+/** Tiny phone models lose the thread in long histories, and their context is only 2K tokens. */
+export const SMALL_HISTORY_LIMIT = 6;
 const MAX_CHARS = 1200;
+
+/**
+ * A deliberately pessimistic token count. English runs about 4 characters a token; scripts such
+ * as Devanagari can cost several tokens a character in small models' English-centric tokenizers.
+ */
+export function estimateTokens(text: string): number {
+  let tokens = 0;
+  for (const ch of text) tokens += ch.charCodeAt(0) < 128 ? 0.3 : 3;
+  return Math.ceil(tokens);
+}
 
 export function buildMessages(
   systemPrompt: string,
-  history: Pick<ChatRecord, 'role' | 'content'>[],
+  history: Pick<ChatRecord, 'role' | 'content' | 'safety'>[],
   limit = HISTORY_LIMIT,
+  /** Tokens the history may use. Older messages are dropped until it fits. */
+  tokenBudget = Infinity,
 ): ChatMessage[] {
-  const recent = history.slice(-limit);
+  // Crisis messages and the fixed safety replies never reach the model, not even as history.
+  // The text check also catches messages stored before the safety flag existed.
+  const safe = history.filter(
+    (m) => !m.safety && !(m.role === 'user' && checkCrisis(m.content).crisis),
+  );
+  const recent = safe
+    .slice(-limit)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) }));
+  let used = recent.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+  // Always keep the latest message, so a reply is still possible.
+  while (recent.length > 1 && used > tokenBudget) {
+    used -= estimateTokens(recent.shift()?.content ?? '');
+  }
   // Chat templates expect the first turn after the system prompt to be the user's.
-  while (recent[0]?.role === 'assistant') recent.shift();
-  return [
-    { role: 'system', content: systemPrompt },
-    ...recent.map((m) => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) })),
-  ];
+  while (recent.length > 1 && recent[0]?.role === 'assistant') recent.shift();
+  return [{ role: 'system', content: systemPrompt }, ...recent];
 }
 
 /** Fixed, reviewed reply for crisis messages. The model is not trusted with this moment. */

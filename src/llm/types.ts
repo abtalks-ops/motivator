@@ -5,7 +5,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export type ModelTier = 'default' | 'quality';
+export type ModelTier = 'phone' | 'default' | 'quality';
 export type RuntimeKind = 'webllm' | 'wllama';
 
 export interface LoadProgress {

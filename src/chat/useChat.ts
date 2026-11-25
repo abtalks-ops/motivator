@@ -1,10 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { explainError, llm, LlmError, type ExplainedError } from '../llm';
+import { explainError, llm, LlmError, MODELS, type ExplainedError } from '../llm';
 import { buildSystemPrompt, parseReply, PROMPT_VERSION } from '../persona';
 import { checkCrisis } from '../safety';
 import { repo, type ChatRecord, type MoodEntry, type Profile } from '../storage';
-import { buildMessages, safetyReply } from './conversation';
+import {
+  buildMessages,
+  estimateTokens,
+  HISTORY_LIMIT,
+  SMALL_HISTORY_LIMIT,
+  safetyReply,
+} from './conversation';
 
 export interface ChatState {
   messages: ChatRecord[];
@@ -35,10 +41,20 @@ export function useChat(profile: Profile, mood: MoodEntry | undefined): ChatStat
       const controller = new AbortController();
       abortRef.current = controller;
       setPending('');
-      const system = buildSystemPrompt({ coach, profile, mood });
-      const raw = await llm.generate(buildMessages(system, history), {
+      // Tiny phone models get the compact prompt, less history and shorter replies.
+      const tier = llm.getState().tier;
+      const small = tier !== null && MODELS[tier].small;
+      const system = buildSystemPrompt({ coach, profile, mood, compact: small });
+      const limit = small ? SMALL_HISTORY_LIMIT : HISTORY_LIMIT;
+      const maxTokens = small ? 160 : 220;
+      // Leave room for the system prompt, the reply and the chat template's own tokens, so a
+      // long conversation (or one in Hindi) never overflows the model's context.
+      const budget = tier
+        ? MODELS[tier].contextWindow - maxTokens - estimateTokens(system) - 128
+        : Infinity;
+      const raw = await llm.generate(buildMessages(system, history, limit, budget), {
         signal: controller.signal,
-        maxTokens: 220,
+        maxTokens,
         onToken: (_delta, full) => setPending(parseReply(full).text),
       });
       const parsed = parseReply(raw);

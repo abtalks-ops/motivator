@@ -3,7 +3,7 @@ import type { CoachId, MoodEntry, Profile } from '../storage';
 import { GESTURES } from './gestures';
 
 /** Bump on any prompt change, and run /test-persona. */
-export const PROMPT_VERSION = '1.1.0';
+export const PROMPT_VERSION = '1.2.0';
 
 const SHARED_RULES = `How you reply:
 - First acknowledge how they feel, in your own words. Then offer a helpful reframe. Then suggest ONE small, concrete step they can take today.
@@ -23,6 +23,24 @@ You are warm but firm. You believe in the person more than they believe in thems
   maya: `You are Maya, a calm, grounded motivational coach with a gentle, patient style.
 You make people feel understood before anything else. You are encouraging and soft-spoken, you celebrate small wins, and you nudge rather than push. When someone is struggling you slow down, normalise the feeling, and help them find the smallest next step that feels doable. You sound like a kind, wise friend: reassuring, never pitying.`,
 };
+
+/**
+ * The compact prompt for tiny phone models (a few hundred million parameters). They follow a
+ * handful of short, direct rules far better than a long brief, and every token of prompt costs
+ * memory and time on a phone. The boundaries stay; gesture tags and nuance go.
+ */
+const COMPACT_PERSONAS: Record<CoachId, string> = {
+  arjun:
+    'You are Arjun, a warm but firm motivational coach. You are direct, you do not let excuses slide, and you push for action today.',
+  maya: 'You are Maya, a gentle, patient motivational coach. You make people feel understood and help them find the smallest doable next step.',
+};
+
+const COMPACT_RULES = `Rules:
+- Reply in 2 or 3 short sentences of plain text. Name how they feel, then give ONE small step they can do today.
+- Be specific to what they said. No quotes, slogans, lists or emojis.
+- You are a coach, not a therapist or doctor. Never diagnose, never discuss medication, and give no medical, diet, legal or money advice. If asked, say it is outside what you can help with and suggest a doctor or other qualified professional.
+- If they mention wanting to die, hurting themselves or someone else, or being in danger, say they matter and urge them to contact a helpline or someone they trust now.
+- You are an AI coach on their device, not a human.`;
 
 const FOCUS_TEXT: Record<Profile['focus'], string> = {
   career: 'their career',
@@ -56,6 +74,8 @@ export interface PromptContext {
   profile: Profile;
   mood?: MoodEntry | undefined;
   now?: Date;
+  /** Use the short prompt written for tiny phone models. */
+  compact?: boolean;
 }
 
 /** The full system prompt: persona, shared rules, then what we know about the user. */
@@ -64,7 +84,9 @@ export function buildSystemPrompt({
   profile,
   mood,
   now = new Date(),
+  compact = false,
 }: PromptContext): string {
+  if (compact) return buildCompactPrompt(coach, profile, mood);
   const about = [
     `Their name is ${profile.name}. Use it now and then, not in every reply.`,
     `They want to focus on ${FOCUS_TEXT[profile.focus]}.`,
@@ -91,6 +113,29 @@ ${SHARED_RULES}
 
 About the person you are coaching:
 ${about.map((line) => `- ${line}`).join('\n')}`;
+}
+
+function buildCompactPrompt(coach: CoachId, profile: Profile, mood?: MoodEntry): string {
+  const about = [
+    `Their name is ${profile.name}.`,
+    `They want help with ${FOCUS_TEXT[profile.focus]}.`,
+    checkCrisis(profile.goal).crisis
+      ? 'Things are very hard for them right now, so be especially gentle.'
+      : `Their goal: "${shortText(profile.goal.trim().replace(/[.!?]+$/, ''), 160)}".`,
+    STYLE_TEXT[profile.style],
+  ];
+  if (mood) about.push(`Today they feel ${MOOD_TEXT[mood.score]}.`);
+  const language = profile.language ? LANGUAGE_TEXT[profile.language] : undefined;
+  if (language) about.push(language);
+  return `${COMPACT_PERSONAS[coach]}
+
+${COMPACT_RULES}
+
+About them: ${about.join(' ')}`;
+}
+
+function shortText(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 /** Opening line from the coach, shown before the user says anything. No model call needed. */

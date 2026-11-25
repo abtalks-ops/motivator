@@ -15,7 +15,7 @@ export class WllamaEngine implements LlmEngine {
     const entry = MODELS[tier];
     try {
       await wllama.loadModelFromUrl(ggufUrl(entry), {
-        n_ctx: 4096,
+        n_ctx: entry.contextWindow,
         progressCallback: ({ loaded, total }) => {
           const fraction = total > 0 ? loaded / total : null;
           onProgress?.({
