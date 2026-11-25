@@ -50,6 +50,7 @@ test('onboarding, mood check-in and delete everything', async ({ page, isMobile 
 });
 
 test('a failed reply shows the reason, then recovers in CPU mode', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Phones start on the CPU, so there is no GPU failure to recover from.');
   // Pretend the browser has WebGPU, like the phone in the bug report, so the GPU runtime is picked.
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'gpu', {
@@ -73,13 +74,39 @@ test('a failed reply shows the reason, then recovers in CPU mode', async ({ page
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByText(/graphics chip ran out of memory/)).toBeVisible();
   await expect(page.getByText(/Technical detail: Device was lost \(simulated\)/)).toBeVisible();
-  // Phones already run the phone model; elsewhere it is offered as a way out of memory trouble.
-  await expect(page.getByRole('button', { name: /smaller phone model/ })).toHaveCount(
-    isMobile ? 0 : 1,
-  );
+  // Off phones, the phone model is offered as a way out of memory trouble.
+  await expect(page.getByRole('button', { name: /smaller phone model/ })).toHaveCount(1);
 
   await page.getByRole('button', { name: /Use CPU mode/ }).click();
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByText(/I hear you about "simulate-gpu-failure"/)).toBeVisible();
   await expect(page.getByText(/graphics chip/)).toBeHidden();
+});
+
+test('phones with WebGPU still run the phone model on the CPU', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Phone-only behaviour.');
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'gpu', {
+      configurable: true,
+      value: {
+        requestAdapter: async () => ({ limits: { maxBufferSize: 4 * 1024 * 1024 * 1024 } }),
+      },
+    });
+  });
+  await page.goto('./');
+  await page.getByLabel('Name or nickname').fill('Ravi');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByText('Confidence', { exact: true }).click();
+  await page.getByLabel(/one goal or challenge/i).fill('Ship my side project');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByText('Tough love', { exact: true }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Start' }).click();
+  await expect(page.getByText(/runs on your phone's processor/)).toBeVisible();
+  await page.getByRole('button', { name: 'Download' }).click();
+  await page.getByRole('button', { name: 'Skip for today' }).click();
+  // The fake GPU failure only happens on WebGPU, so a reply proves the CPU runtime is in use.
+  await page.getByLabel('Message Arjun').fill('simulate-gpu-failure');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText(/I hear you about "simulate-gpu-failure"/)).toBeVisible();
 });

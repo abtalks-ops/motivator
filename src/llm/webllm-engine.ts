@@ -63,10 +63,21 @@ export class WebLlmEngine implements LlmEngine {
     }
   }
 
+  /**
+   * Never throws. After the GPU device is lost, WebLLM may already have torn the model down, and
+   * unloading again fails with "Tokenizer instance already deleted". That must not stop the next
+   * load, and terminating the worker frees whatever is left either way.
+   */
   async unload(): Promise<void> {
-    await this.engine?.unload();
-    this.worker?.terminate();
+    const { engine, worker } = this;
     this.engine = null;
     this.worker = null;
+    try {
+      await engine?.unload();
+    } catch {
+      // Already gone; nothing more to free.
+    } finally {
+      worker?.terminate();
+    }
   }
 }

@@ -59,6 +59,20 @@ describe('LlmService', () => {
 });
 
 describe('LlmService safety', () => {
+  it('still loads a new model when the old one cannot unload (GPU device lost)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const lost = fakeEngine({
+      unload: vi.fn(() => Promise.reject(new Error('Tokenizer instance already deleted'))),
+    });
+    const engines = [lost, fakeEngine()];
+    const service = new LlmService(async () => engines.shift() ?? fakeEngine());
+    await service.load('phone', 'webllm');
+    await service.load('phone', 'wllama');
+    expect(lost.unload).toHaveBeenCalled();
+    expect(service.getState()).toMatchObject({ status: 'ready', runtime: 'wllama', error: null });
+    vi.restoreAllMocks();
+  });
+
   it('unloads an engine whose load failed', async () => {
     const engine = fakeEngine({
       load: async () => {

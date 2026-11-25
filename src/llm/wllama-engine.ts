@@ -16,6 +16,9 @@ export class WllamaEngine implements LlmEngine {
     try {
       await wllama.loadModelFromUrl(ggufUrl(entry), {
         n_ctx: entry.contextWindow,
+        // wllama 4 also runs on WebGPU when it can, so "CPU mode" was still using the GPU and
+        // failed the same way. Zero GPU layers keeps the whole model on the processor.
+        n_gpu_layers: 0,
         progressCallback: ({ loaded, total }) => {
           const fraction = total > 0 ? loaded / total : null;
           onProgress?.({
@@ -49,8 +52,10 @@ export class WllamaEngine implements LlmEngine {
     }
   }
 
+  /** Never throws: a crashed worker cannot exit cleanly, and that must not block the next load. */
   async unload(): Promise<void> {
-    await this.wllama?.exit();
+    const wllama = this.wllama;
     this.wllama = null;
+    await wllama?.exit().catch(() => undefined);
   }
 }

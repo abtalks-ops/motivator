@@ -63,15 +63,14 @@ export function isMobile(nav: Navigator): boolean {
 export function recommend(device: DeviceInfo): Recommendation {
   const runtime: RuntimeKind = device.webgpu ? 'webllm' : 'wllama';
 
-  // Phones share memory between the GPU and everything else, and close a tab that asks for too
-  // much, so they get the phone model whatever their GPU reports.
+  // Phones get the phone model on the CPU, whatever their GPU reports. Mobile WebGPU is still
+  // fragile: phones lose the GPU device under memory pressure or in the background, and even the
+  // 360M model failed that way on a real phone. The CPU is slower but steady.
   if (device.mobile) {
     return {
-      runtime,
+      runtime: 'wllama',
       tier: 'phone',
-      reason: device.webgpu
-        ? 'The phone model is small enough to run smoothly on a phone.'
-        : 'The phone model is small enough to run on this phone without WebGPU.',
+      reason: "The phone model runs on your phone's processor, which is slower but more reliable.",
     };
   }
   if (device.memoryGB !== null && device.memoryGB < 4) {
