@@ -14,9 +14,9 @@ describe('recommend', () => {
     expect(recommend(desktop)).toMatchObject({ runtime: 'webllm', tier: 'quality' });
   });
 
-  it('suggests the phone model on phones, even with a strong GPU', () => {
+  it('suggests the phone model on the CPU for phones, even with a strong GPU', () => {
     expect(recommend({ ...desktop, mobile: true })).toMatchObject({
-      runtime: 'webllm',
+      runtime: 'wllama',
       tier: 'phone',
     });
   });

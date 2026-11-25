@@ -76,8 +76,12 @@ export class LlmService {
     const id = ++this.loadId;
     this.set({ status: 'loading', tier, runtime, progress: null, error: null, errorDetail: null });
     try {
-      await this.engine?.unload();
+      // A broken old engine (for example after a lost GPU) must not block loading a new one.
+      const old = this.engine;
       this.engine = null;
+      await old
+        ?.unload()
+        .catch((err: unknown) => logLlmError('unloading the old model failed', err));
       const engine = await this.factory(runtime);
       try {
         await engine.load(tier, (progress) => {
@@ -88,7 +92,7 @@ export class LlmService {
         throw err;
       }
       if (id !== this.loadId) {
-        await engine.unload();
+        await engine.unload().catch(() => undefined);
         return;
       }
       this.engine = engine;
@@ -147,8 +151,9 @@ export class LlmService {
 
   async unload(): Promise<void> {
     this.loadId++;
-    await this.engine?.unload();
+    const old = this.engine;
     this.engine = null;
+    await old?.unload().catch(() => undefined);
     this.set(INITIAL);
   }
 

@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { ChatScreen, logMoodSafely } from '../chat';
-import { llm, logLlmError, MODELS } from '../llm';
+import { isMobile, llm, logLlmError, MODELS } from '../llm';
 import { MoodCheckIn, MOODS, OnboardingForm } from '../onboarding';
 import { UpdatePrompt } from '../pwa/UpdatePrompt';
 import { usePersistentStorage } from '../pwa/usePersistentStorage';
@@ -27,6 +27,16 @@ export function App() {
   // Once a model has been chosen, load it from the local cache in the background on every visit.
   useEffect(() => {
     if (!llmChoice || llmChoice === LOADING) return;
+    // Phones always run on the CPU (ADR 0006): WebGPU kept losing the device there. A phone that
+    // saved a WebGPU choice earlier is moved to the phone model on the CPU; saving re-runs this.
+    if (llmChoice.runtime === 'webllm' && isMobile(navigator)) {
+      const cpu: LlmChoice = { tier: 'phone', runtime: 'wllama' };
+      void repo.setSetting(LLM_SETTING, cpu).catch((err: unknown) => {
+        logLlmError('saving the phone model choice failed', err);
+        void llm.load(cpu.tier, cpu.runtime);
+      });
+      return;
+    }
     const state = llm.getState();
     const differs = state.tier !== llmChoice.tier || state.runtime !== llmChoice.runtime;
     if (state.status === 'idle' || (differs && state.status !== 'loading')) {
