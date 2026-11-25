@@ -62,6 +62,57 @@ describe('buildSystemPrompt', () => {
     );
   });
 
+  describe('compact prompt for phone models', () => {
+    const compact = (overrides: Partial<Profile> = {}, mood?: MoodEntry) =>
+      buildSystemPrompt({
+        coach: 'arjun',
+        profile: { ...profile, ...overrides },
+        mood,
+        compact: true,
+      });
+
+    it('is much shorter than the full prompt and keeps the boundaries', () => {
+      const short = compact();
+      const full = buildSystemPrompt({ coach: 'arjun', profile });
+      expect(short.length).toBeLessThan(full.length / 2);
+      expect(short.length).toBeLessThan(1200);
+      expect(short).toMatch(/You are Arjun/);
+      expect(short).toMatch(/not a therapist/);
+      expect(short).toMatch(/medication/);
+      expect(short).toMatch(/helpline/);
+      expect(short).toMatch(/not a human/);
+      expect(short).toMatch(/AI coach/);
+      expect(short).toMatch(/diagnose/);
+      expect(short).toMatch(/diet/);
+      expect(short).toMatch(/someone else/);
+      expect(short).toMatch(/qualified professional/);
+      expect(short).not.toMatch(/\[nod\]/);
+    });
+
+    it('keeps each coach distinct', () => {
+      expect(buildSystemPrompt({ coach: 'maya', profile, compact: true })).toMatch(
+        /You are Maya.*gentle/s,
+      );
+    });
+
+    it('includes the profile and mood briefly', () => {
+      const short = compact({}, lowMood);
+      expect(short).toContain('Their name is Asha');
+      expect(short).toContain('Their goal: "Apply to three jobs this week".');
+      expect(short).toContain('Today they feel low');
+      expect(short).not.toContain('tired');
+    });
+
+    it('keeps crisis text out and trims long goals', () => {
+      expect(compact({ goal: 'I want to die' })).not.toMatch(/want to die/);
+      expect(compact({ goal: 'x'.repeat(500) })).not.toContain('x'.repeat(200));
+    });
+
+    it('asks for Hindi when the user prefers it', () => {
+      expect(compact({ language: 'hi' })).toMatch(/Hindi/);
+    });
+  });
+
   it('has a version', () => {
     expect(PROMPT_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });

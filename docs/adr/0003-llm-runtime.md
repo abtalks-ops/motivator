@@ -14,7 +14,8 @@ offline. Devices differ widely in GPU support and memory.
 - **Fallback runtime:** wllama (llama.cpp compiled to WebAssembly) with GGUF weights, for
   browsers without WebGPU.
 - **Tiers:**
-  - _Default:_ Qwen2.5 1.5B Instruct, 4-bit (about 1 GB). Runs on most phones, handles
+  - _Phone:_ SmolLM2 360M Instruct, the default on phones and tablets (ADR 0006).
+  - _Default:_ Qwen2.5 1.5B Instruct, 4-bit (about 1 GB). For laptops and newer phones, handles
     Hindi reasonably.
   - _Quality:_ Llama 3.2 3B Instruct, 4-bit (about 2 GB). More empathetic, less repetitive.
 - On first launch the app reads WebGPU support, adapter limits and `navigator.deviceMemory`,

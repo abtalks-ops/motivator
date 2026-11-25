@@ -107,6 +107,15 @@ export function App() {
                 logLlmError('switching to CPU mode failed', err);
               }
             }}
+            onUsePhoneModel={async () => {
+              const runtime = llm.getState().runtime ?? llmChoice.runtime;
+              try {
+                await llm.load('phone', runtime);
+                if (llm.getState().status === 'ready') await saveChoice({ tier: 'phone', runtime });
+              } catch (err) {
+                logLlmError('switching to the phone model failed', err);
+              }
+            }}
           />
         )}
       </main>
@@ -148,12 +157,14 @@ function Home({
   choice,
   onSettings,
   onUseCpu,
+  onUsePhoneModel,
 }: {
   profile: Profile;
   mood: MoodEntry | undefined;
   choice: LlmChoice;
   onSettings: () => void;
   onUseCpu: () => Promise<void>;
+  onUsePhoneModel: () => Promise<void>;
 }) {
   const moodInfo = MOODS.find((m) => m.score === mood?.score);
   return (
@@ -173,7 +184,13 @@ function Home({
           Settings
         </button>
       </div>
-      <ChatScreen profile={profile} mood={mood} choice={choice} onUseCpu={() => void onUseCpu()} />
+      <ChatScreen
+        profile={profile}
+        mood={mood}
+        choice={choice}
+        onUseCpu={() => void onUseCpu()}
+        onUsePhoneModel={() => void onUsePhoneModel()}
+      />
     </>
   );
 }

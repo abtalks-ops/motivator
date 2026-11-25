@@ -1,4 +1,4 @@
-import { buildMessages, safetyReply } from './conversation';
+import { buildMessages, estimateTokens, safetyReply } from './conversation';
 
 describe('buildMessages', () => {
   it('puts the system prompt first and keeps the latest history', () => {
@@ -17,6 +17,33 @@ describe('buildMessages', () => {
       { role: 'user', content: 'hi' },
     ]);
     expect(messages.map((m) => m.role)).toEqual(['system', 'user']);
+  });
+
+  it('drops the oldest messages to fit a token budget, but keeps the latest', () => {
+    const long = 'a'.repeat(1000); // about 300 tokens
+    const history = [
+      { role: 'user' as const, content: long },
+      { role: 'assistant' as const, content: long },
+      { role: 'user' as const, content: 'latest' },
+    ];
+    expect(buildMessages('SYS', history, 12, 400).map((m) => m.content)).toEqual(['SYS', 'latest']);
+    expect(buildMessages('SYS', history, 12, 1).map((m) => m.content)).toEqual(['SYS', 'latest']);
+    expect(buildMessages('SYS', history, 12)).toHaveLength(4);
+  });
+
+  it('counts non-Latin scripts as expensive', () => {
+    expect(estimateTokens('पढ़ाई')).toBeGreaterThan(estimateTokens('study'));
+  });
+
+  it('never sends crisis messages or safety replies as history', () => {
+    const messages = buildMessages('SYS', [
+      { role: 'user', content: 'I want to die', safety: true },
+      { role: 'assistant', content: 'Please call a helpline', safety: true },
+      { role: 'user', content: 'I want to kill myself' },
+      { role: 'assistant', content: 'old reply' },
+      { role: 'user', content: 'Help me plan my week' },
+    ]);
+    expect(messages.map((m) => m.content)).toEqual(['SYS', 'Help me plan my week']);
   });
 });
 

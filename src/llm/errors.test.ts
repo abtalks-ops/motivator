@@ -1,4 +1,10 @@
-import { errorText, explainError, isRecoverableGpuError, LlmError } from './errors';
+import {
+  errorText,
+  explainError,
+  isRecoverableGpuError,
+  LlmError,
+  smallerModelMayHelp,
+} from './errors';
 
 describe('errorText', () => {
   it('reads plain strings, which is how the WebLLM worker rejects', () => {
@@ -68,4 +74,16 @@ describe('error rules with real-looking runtime text', () => {
     expect(isRecoverableGpuError('Error: Device was lost')).toBe(true);
     expect(isRecoverableGpuError('Error: Prompt tokens exceed context window size')).toBe(false);
   });
+});
+
+describe('smallerModelMayHelp', () => {
+  it.each(['Device was lost', 'GPUOutOfMemoryError', 'Failed to allocate buffer'])(
+    'offers a smaller model for %s',
+    (detail) => expect(smallerModelMayHelp(detail)).toBe(true),
+  );
+
+  it.each(['Prompt exceeds context window size', 'Failed to fetch', null])(
+    'does not for %s',
+    (detail) => expect(smallerModelMayHelp(detail)).toBe(false),
+  );
 });

@@ -13,7 +13,7 @@ function appConfig(): AppConfig {
       model_lib: m.webllm.modelLib,
       vram_required_MB: m.webllm.vramMB,
       low_resource_required: true,
-      overrides: { context_window_size: m.webllm.contextWindow },
+      overrides: { context_window_size: m.contextWindow },
     })),
   };
 }

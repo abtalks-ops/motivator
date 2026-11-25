@@ -1,17 +1,21 @@
 import 'fake-indexeddb/auto';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type * as LlmModule from '../llm';
-import type { ChatMessage, GenerateOptions } from '../llm';
+import type { ChatMessage, GenerateOptions, ModelTier } from '../llm';
 import { db, repo, type Profile } from '../storage';
 import { useChat } from './useChat';
 
 const generate = vi.fn<(messages: ChatMessage[], options?: GenerateOptions) => Promise<string>>();
+let tier: ModelTier | null = 'default';
 
 vi.mock('../llm', async (importOriginal) => {
   const actual = await importOriginal<typeof LlmModule>();
   return {
     ...actual,
-    llm: { generate: (m: ChatMessage[], o?: GenerateOptions) => generate(m, o) },
+    llm: {
+      generate: (m: ChatMessage[], o?: GenerateOptions) => generate(m, o),
+      getState: () => ({ tier }),
+    },
   };
 });
 
@@ -28,7 +32,44 @@ const profile: Profile = {
 
 beforeEach(async () => {
   generate.mockReset();
+  tier = 'default';
   await repo.clearMessages();
+});
+
+describe('useChat model size', () => {
+  async function promptFor(t: ModelTier) {
+    tier = t;
+    generate.mockResolvedValueOnce('One step today.');
+    const { result } = renderHook(() => useChat(profile, undefined));
+    await act(() => result.current.send('I keep putting it off'));
+    const [messages, options] = generate.mock.calls.at(-1) ?? [];
+    return { system: messages?.[0]?.content ?? '', maxTokens: options?.maxTokens };
+  }
+
+  it('sends the compact prompt and shorter replies to the phone model', async () => {
+    const phone = await promptFor('phone');
+    const light = await promptFor('default');
+    expect(phone.system.length).toBeLessThan(light.system.length / 2);
+    expect(phone.maxTokens).toBeLessThan(light.maxTokens ?? 0);
+  });
+
+  it('sends the phone model less history, within its context', async () => {
+    for (let i = 0; i < 20; i++) {
+      await repo.addMessage({
+        role: i % 2 ? 'assistant' : 'user',
+        content: 'मुझे पढ़ाई में मन नहीं लगता '.repeat(8),
+        coach: 'arjun',
+        createdAt: i,
+      });
+    }
+    tier = 'phone';
+    generate.mockResolvedValueOnce('One step today.');
+    const { result } = renderHook(() => useChat(profile, undefined));
+    await act(() => result.current.send('Help'));
+    const sent = generate.mock.calls.at(-1)?.[0] ?? [];
+    expect(sent.length - 1).toBeLessThanOrEqual(6);
+    expect(sent.at(-1)).toEqual({ role: 'user', content: 'Help' });
+  });
 });
 
 describe('useChat errors and retry', () => {
